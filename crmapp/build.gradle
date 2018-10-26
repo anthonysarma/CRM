@@ -1,0 +1,138 @@
+apply plugin: 'application'
+apply plugin: 'eclipse'
+mainClassName = 'com.infinira.crm.test.TestCustomer'
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+def crmAppDir = "../crmapp"
+def buildDir = "${crmAppDir}/build"
+def distDir = "${buildDir}/dist"
+def classDir = "${buildDir}/classes"
+def confDir = "${crmAppDir}/conf"
+
+repositories {
+	mavenLocal()
+	mavenCentral()
+}
+
+dependencies {
+     compile fileTree(dir: "${crmAppDir}/lib", include: ['**/*.jar'])
+     //compile project(':sample')
+	 runtime files("${confDir}")
+	 testCompile("junit:junit:4.12")
+}
+
+test {
+	classpath = project.sourceSets.test.runtimeClasspath + files("$buildDir/classes/test")
+}
+
+//optional
+sourceSets {
+ 	main {
+		java {
+ 			srcDir "${crmAppDir}/src/main/java"
+ 		}
+		output.classesDir = "$buildDir/classes/main"
+	}
+	
+	test {
+		java {
+ 			srcDir "${crmAppDir}/src/test/java"
+ 		}
+		output.classesDir = "$crmAppDir/bin/classes/test"
+	}
+}
+
+tasks.withType(JavaCompile) {
+	//enable compilation in a separate daemon process
+    options.fork = true
+
+    //enable incremental compilation
+    options.incremental = true
+}	
+
+//optional
+task copyLib(type: Copy, dependsOn: compileJava) {
+	
+	//copying the External Jars From Root to Build
+	from fileTree(dir: "${crmAppDir}/lib", include: ['**/*.jar'])
+	into file("${buildDir}/lib")
+}
+
+jar {
+	
+	baseName = "crmapp"
+    description = 'Builds Jar'
+	
+	//optional
+	from(sourceSets.main.output) {  
+        include "${classDir}/main/.class" 
+	}
+	
+	destinationDir = file("${buildDir}/lib")
+	
+	/*manifest {
+		attributes(
+			"Class-Path" : configurations.runtime.collect{it.name}
+		)
+    }*/
+}
+
+task buildZip(type: Zip, dependsOn:['jar', 'copyLib']) {
+   
+	 //creating distributions
+	description = 'Building zip'
+	baseName = 'crmapp'
+	destinationDir = file("${buildDir}/dist")
+	into('conf') {
+		from { "${crmAppDir}/conf" }
+	}
+	into('lib') {
+		from { "${buildDir}/lib" }
+	}
+	into('bin') {
+		from { "${crmAppDir}/bin" }
+	}
+	into('docs') {
+		from { "${crmAppDir}/docs" }
+	}
+}
+
+task copyZip(type: Copy, dependsOn: 'buildZip') {
+	
+	//Copying the Distribution files to Root
+	description = 'Copy the Distribution Folder to Root'
+	from file("$distDir/crmapp.zip")
+    into file("${crmAppDir}/dist")
+}
+
+task runApp(type: JavaExec) {
+	main = 'com.infinira.crm.test.TestCustomer'
+	classpath = project.sourceSets.test.runtimeClasspath 
+}
+
+task runTests(type: Test) {
+	include '${classDir}/test/.class'
+}
+
+clean {
+	description = 'Delete buildDir and distDir'
+	delete  buildDir
+	delete "${crmAppDir}/dist"
+}
+
+task mainTasks(dependsOn:['clean','build','copyLib','buildZip','copyZip','runApp'])
+
+build.mustRunAfter clean
+
+//check.dependsOn.remove(test)
+distZip.enabled = false
+distTar.enabled = false
+startScripts.enabled = false
+
+defaultTasks 'mainTasks'
+
+
+
+
+
